@@ -1,0 +1,9 @@
+Flask>=2.0
+scapy
+geoip2
+requests
+scikit-learn  # optional but strongly recommended
+# dsjodsojdsjdbfnfngnn
+# sdjsjssfnosnofnsofno
+# sdknosdjnnjosdoj
+# dsanjsjfjo

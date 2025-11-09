@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AURA — Cyber Threat Radar</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Roboto+Mono:wght@300;400&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#0b0d10;
+      --panel:#0f1316;
+      --muted:#9aa3a8;
+      --accent:#00d4c4;
+      --danger:#ff5a5f;
+      --card:#0d1114;
+      --glass: rgba(255,255,255,0.03);
+      --radius:12px;
+    }
+    html,body { height:100%; margin:0; background: linear-gradient(180deg,#050607 0%, #0b0d10 100%); color:#e6eef1; font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+    .app {
+      display:grid;
+      grid-template-columns: 1fr 420px;
+      height:100vh;
+      gap:18px;
+      padding:18px;
+      box-sizing:border-box;
+      align-items:stretch;
+    }
+
+    /* Left: map & top bar */
+    .left {
+      display:flex; flex-direction:column; gap:12px;
+    }
+    .topbar {
+      display:flex; align-items:center; gap:12px;
+      background:var(--panel); border-radius:12px; padding:12px 14px; box-shadow: 0 6px 30px rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.03);
+    }
+    .logo {
+      display:flex; align-items:center; gap:10px;
+    }
+    .brand {
+      width:44px; height:44px; border-radius:10px; background:linear-gradient(135deg,var(--accent), #8be8e0);
+      display:flex; align-items:center; justify-content:center; font-weight:700; color:#022b28; font-family: "Roboto Mono";
+      box-shadow: 0 6px 18px rgba(0,212,196,0.12);
+    }
+    .title { font-weight:600; letter-spacing:1px; }
+    .topbar-right { margin-left:auto; display:flex; gap:10px; align-items:center; }
+
+    .stat {
+      background:var(--glass); padding:8px 12px; border-radius:10px; font-size:13px; color:var(--muted); display:flex; gap:6px; align-items:center;
+    }
+    .stat strong { color:#fff; font-weight:600; }
+
+    .map-card {
+      flex:1; border-radius:14px; overflow:hidden; background: linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.1));
+      border: 1px solid rgba(255,255,255,0.03); box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+      display:flex; flex-direction:column;
+    }
+    #map { width:100%; height:100%; }
+
+    /* Right sidebar: controls */
+    .right {
+      display:flex; flex-direction:column; gap:12px;
+    }
+    .panel {
+      background:var(--panel); border-radius:12px; padding:12px; border: 1px solid rgba(255,255,255,0.03);
+      box-shadow: 0 6px 22px rgba(0,0,0,0.5);
+    }
+    .panel h3 { margin:0 0 8px 0; font-size:14px; color:#bfeee6; }
+    .tabs { display:flex; gap:8px; margin-bottom:8px; }
+    .tab-btn { flex:1; padding:8px 10px; border-radius:10px; border:none; background:transparent; color:var(--muted); cursor:pointer; font-weight:600; font-size:13px; }
+    .tab-btn.active { background:rgba(0,212,196,0.08); color:var(--accent); box-shadow: inset 0 -2px 0 rgba(0,212,196,0.06); }
+
+    .list { max-height:360px; overflow:auto; display:flex; flex-direction:column; gap:10px; padding-right:6px; }
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.0));
+      border-radius:10px; padding:10px; border:1px solid rgba(255,255,255,0.02);
+      display:flex; justify-content:space-between; gap:8px; align-items:center; font-size:13px;
+    }
+    .card .meta { color:var(--muted); font-size:12px; }
+
+    /* geofence mini */
+    .geofence-compact { display:flex; gap:8px; align-items:center; }
+    .input { width:100%; padding:8px 10px; border-radius:8px; background:#071014; border:1px solid rgba(255,255,255,0.03); color:#dfeff0; font-family:Roboto Mono; font-size:13px; }
+    .btn { padding:8px 12px; border-radius:8px; border:none; cursor:pointer; font-weight:600; }
+    .btn.primary { background:var(--accent); color:#022b28; box-shadow: 0 8px 18px rgba(0,212,196,0.08); }
+    .btn.ghost { background:transparent; border:1px solid rgba(255,255,255,0.03); color:var(--muted); }
+
+    /* modal honeypot & admin */
+    .modal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:9999; background:rgba(2,6,8,0.6); }
+    .modal .box { width:760px; max-height:80vh; overflow:auto; border-radius:12px; padding:16px; background:linear-gradient(180deg,#071014,#0b0f12); border:1px solid rgba(255,255,255,0.04); }
+
+    footer { color:var(--muted); font-size:12px; margin-top:auto; text-align:center; padding:8px; }
+    @media (max-width:1000px) { .app { grid-template-columns: 1fr; grid-auto-rows: auto 1fr; } .right { order:2; } .left { order:1; } .map-card { height:56vh; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- LEFT: main map and header -->
+    <div class="left">
+      <div class="topbar">
+        <div class="logo">
+          <div class="brand">A</div>
+          <div>
+            <div class="title">AURA</div>
+            <div style="font-size:12px;color:var(--muted)">Cyber Threat Radar — Live</div>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <div class="stat">Status: <strong id="status-display">Loading…</strong></div>
+          <div class="stat">Blocked: <strong id="blocked-count">0</strong></div>
+          <div class="stat">Honeypots: <strong id="honeypot-count">0</strong></div>
+        </div>
+      </div>
+
+      <div class="map-card panel" style="padding:0;">
+        <div id="map"></div>
+      </div>
+      <footer>Built with ♥ • Keep this UI private for demo/presentation only</footer>
+    </div>
+
+    <!-- RIGHT: sidebar -->
+    <div class="right">
+      <!-- Controls / Geofence -->
+      <div class="panel" id="panel-geofence">
+        <h3>Geofence</h3>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input id="gf-lat" class="input" placeholder="Center lat (e.g. 17.3850)" />
+          <input id="gf-lon" class="input" placeholder="Center lon (e.g. 78.4867)" />
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input id="gf-radius" class="input" placeholder="Radius (km)" />
+          <button id="gf-save" class="btn primary">Save</button>
+          <button id="gf-reset" class="btn ghost">Reset</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div style="font-size:13px;color:var(--muted)">Unknown-area rule:</div>
+          <select id="geo-action" class="input" style="width:160px">
+            <option value="alert">Alert Only</option>
+            <option value="block">Block</option>
+            <option value="honeypot">Honeypot</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Activity with extended tabs (Alerts | Logs | Honeypots | Blocked | Admin) -->
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0">Activity</h3>
+          <div style="display:flex;gap:8px;">
+            <button id="tab-alerts" class="tab-btn active">Alerts</button>
+            <button id="tab-logs" class="tab-btn">Logs</button>
+            <button id="tab-honeypots" class="tab-btn">Honeypots</button>
+            <button id="tab-blocked" class="tab-btn">Blocked</button>
+            <button id="tab-admin" class="tab-btn">Admin</button>
+          </div>
+        </div>
+
+        <!-- view containers: alerts, logs, honeypots, blocked -->
+        <div id="alerts-list" class="list" style="margin-top:10px;"></div>
+        <div id="logs-list" class="list" style="margin-top:10px; display:none;"></div>
+        <div id="honeypots-list" class="list" style="margin-top:10px; display:none;"></div>
+        <div id="blocked-list-compact" class="list" style="margin-top:10px; display:none;"></div>
+      </div>
+
+      <!-- Integrity (kept) -->
+      <div class="panel" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0">Integrity Events</h3>
+          <button id="refresh-blocked" class="btn ghost">Refresh</button>
+        </div>
+        <div id="integrity-list" class="list" style="max-height:260px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Honeypot modal (re-usable) -->
+  <div id="hp-modal" class="modal">
+    <div class="box">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <h3 style="margin:0">Honeypot — <span id="hp-modal-title">(IP)</span></h3>
+        <div>
+          <button id="hp-download-btn" class="btn primary">Download logs</button>
+          <button id="hp-modal-close" class="btn ghost">Close</button>
+        </div>
+      </div>
+      <div id="hp-modal-body" style="font-family:Roboto Mono; font-size:13px; color:var(--muted)"></div>
+    </div>
+  </div>
+
+  <!-- Admin modal -->
+  <div id="admin-modal" class="modal">
+    <div class="box">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <h3 style="margin:0">Admin Controls</h3>
+        <div>
+          <button id="admin-close" class="btn ghost">Close</button>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button id="force-integrity" class="btn primary">Force Integrity Scan</button>
+        <button id="view-baseline" class="btn ghost">Show Baseline Path</button>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+        <input id="admin-unblock-ip" class="input" placeholder="IP to unblock (e.g. 1.2.3.4)" />
+        <button id="admin-unblock-btn" class="btn ghost">Unblock</button>
+      </div>
+
+      <div id="admin-output" style="font-family:Roboto Mono; font-size:13px; color:var(--muted); margin-top:8px;"></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-curve/leaflet.curve.js"></script>
+  <script src="/static/script.js"></script>
+</body>
+</html>
