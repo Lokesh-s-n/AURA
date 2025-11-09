@@ -1,0 +1,6 @@
+*.mmdb
+__pycache__/
+*.log
+*.pyc
+integrity_baseline.json
+geofence_config.json
